@@ -1,4 +1,4 @@
-# fl-for-AI-health: Federated Learning for Medical Imaging
+# Federated Learning for Medical Imaging
 
 A Flower-based federated learning application for medical image analysis tasks (classification and segmentation) using PyTorch.
 
