@@ -1,0 +1,66 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "fl-for-ai-health"
+version = "1.0.0"
+description = ""
+license = "Apache-2.0"
+dependencies = [
+    "flwr[simulation]>=1.13.0",
+    "flwr-datasets[vision]>=0.3.0",
+    "torch==2.4.1",
+    "torchvision==0.19.1",
+    "medmnist==3.0.2",
+    "datasets==3.2.0",
+    "timm==1.0.14",  
+    "nibabel==5.3.2",
+    "numpy==1.26.4",
+    "torchmetrics==1.6.1",
+    "python-dotenv==1.0.1", 
+    "tensorboard==2.18.0",  
+
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["."]
+
+[tool.flwr.app]
+publisher = "Magnus"
+
+[tool.flwr.app.components]
+# Uncomment the task you want to run
+
+# Classification
+serverapp = "fl_for_ai_health.classification.class_server:app"
+clientapp = "fl_for_ai_health.classification.class_client:app"
+
+# Segmentation
+# serverapp = "fl_for_ai_health.segmentation.seg_server:app"
+# clientapp = "fl_for_ai_health.segmentation.seg_client:app"
+
+[tool.flwr.app.config]
+num-server-rounds = 10
+fraction-fit = 0.5
+local-epochs = 1
+data-dir = "/home/magnus//Datasets/Images/MedicalDecathlon/Task01_BrainTumour"
+dataset-json-path = "/home/magnus/Datasets/Images/MedicalDecathlon/Task01_BrainTumour/dataset.json"
+in-channels = 3
+num-classes = 9
+img-size = 64
+batch-size = 64
+learning-rate = 4e-3
+weight-decay = 1e-6
+val-split = 0.2
+num-workers = 4
+tb_run_name = "TinyViT"
+model="tiny-vit"
+
+[tool.flwr.federations]
+default = "local-simulation"
+
+[tool.flwr.federations.local-simulation]
+options.num-supernodes = 10
+options.backend.client-resources.num-cpus = 4 # each ClientApp assumes to use 1 CPU (default is 2)
+options.backend.client-resources.num-gpus = 0.25
