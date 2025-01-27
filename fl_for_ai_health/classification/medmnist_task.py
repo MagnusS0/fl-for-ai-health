@@ -21,21 +21,19 @@ def load_model(run_config: Dict) -> nn.Module:
     """Load the model specified in the run_config."""
     if run_config["model"] == "resnet-18":
         return ResNet18(
-            in_channels=run_config["in-channels"],
-            num_classes=run_config["num-classes"]
+            in_channels=run_config["in-channels"], num_classes=run_config["num-classes"]
         )
     elif run_config["model"] == "tiny-vit":
         return tiny_vit_5m_224(
             img_size=run_config["img-size"],
             in_chans=run_config["in-channels"],
-            num_classes=run_config["num-classes"]
+            num_classes=run_config["num-classes"],
         )
     else:
         raise ValueError(f"Model {run_config['model']} not supported")
 
 
 fds = None  # Cache FederatedDataset
-
 
 
 def load_data(partition_id: int, num_partitions: int, split: str = "train"):
@@ -66,14 +64,17 @@ def load_data(partition_id: int, num_partitions: int, split: str = "train"):
     return trainloader, testloader
 
 
-scaler = GradScaler() # Gradient scaling for mixed precision training
+scaler = GradScaler()  # Gradient scaling for mixed precision training
+
 
 def train(net, trainloader, epochs, device):
     """Train the model on the training set."""
     net.to(device)  # move model to GPU if available
     criterion = torch.nn.CrossEntropyLoss().to(device)
     optimizer = torch.optim.SGD(net.parameters(), lr=0.001, momentum=0.9)
-    scheduler = torch.optim.lr_scheduler.OneCycleLR(optimizer, max_lr=0.001, total_steps=len(trainloader) * epochs)
+    scheduler = torch.optim.lr_scheduler.OneCycleLR(
+        optimizer, max_lr=0.001, total_steps=len(trainloader) * epochs
+    )
     net.train()
     running_loss = 0.0
     for _ in range(epochs):
@@ -110,24 +111,24 @@ def test(net, testloader, device):
             probs = F.softmax(outputs, dim=1)
             loss += criterion(outputs, labels).item()
             correct += (torch.max(outputs.data, 1)[1] == labels).sum().item()
-            
+
             # Store probabilities and labels for AUC calculation
             all_probs.extend(probs.cpu().numpy())
             all_labels.extend(labels.cpu().numpy())
-            
+
     accuracy = correct / len(testloader.dataset)
     loss = loss / len(testloader)
     accuracy = correct / len(testloader.dataset)
 
     # Calculate AUC (handles both binary and multiclass cases)
     try:
-        if len(np.unique(all_labels)) == 2: 
+        if len(np.unique(all_labels)) == 2:
             auc = roc_auc_score(all_labels, np.array(all_probs)[:, 1])
         else:  # Multi-class classification
-            auc = roc_auc_score(all_labels, all_probs, multi_class='ovr')
+            auc = roc_auc_score(all_labels, all_probs, multi_class="ovr")
     except ValueError:
-        auc = float('nan')
-        
+        auc = float("nan")
+
     return loss, accuracy, auc
 
 

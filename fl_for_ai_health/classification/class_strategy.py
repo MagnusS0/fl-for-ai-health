@@ -2,9 +2,9 @@
 
 import os
 import torch
-import matplotlib.pyplot as plt
 import matplotlib as mpl
-mpl.use('Agg')
+
+mpl.use("Agg")
 from rich import print
 from typing import List, Tuple, Dict
 from flwr.common import EvaluateRes, parameters_to_ndarrays
@@ -13,10 +13,17 @@ from fl_for_ai_health.classification.medmnist_task import set_weights, load_mode
 import datetime
 from torch.utils.tensorboard import SummaryWriter
 
+
 class CustomFedAvg(FedAvg):
-    def __init__(self, *args, tb_log_dir: str = "tb_logs", tb_run_name: str = "classification_run", **kwargs):
+    def __init__(
+        self,
+        *args,
+        tb_log_dir: str = "tb_logs",
+        tb_run_name: str = "classification_run",
+        **kwargs,
+    ):
         super().__init__(*args, **kwargs)
-        
+
         # Initialize TensorBoard
         self.tb_log_dir = f"{tb_log_dir}/{tb_run_name}_{datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}"
         os.makedirs(tb_log_dir, exist_ok=True)
@@ -34,7 +41,7 @@ class CustomFedAvg(FedAvg):
             model = load_model(run_config)
             parameters_ndarrays = parameters_to_ndarrays(parameters)
             set_weights(model, parameters_ndarrays)
-            save_path = os.path.join(self.tb_log_dir, f"best_model.pth")
+            save_path = os.path.join(self.tb_log_dir, "best_model.pth")
             torch.save(model.state_dict(), save_path)
             print(f"💾 Saved best model to {save_path}")
 
@@ -52,31 +59,32 @@ class CustomFedAvg(FedAvg):
         accuracies = [r.metrics["accuracy"] * r.num_examples for _, r in results]
         aucs = [r.metrics["auc"] * r.num_examples for _, r in results]
         examples = [r.num_examples for _, r in results]
-        
+
         avg_accuracy = sum(accuracies) / sum(examples)
         avg_auc = sum(aucs) / sum(examples)
         loss_aggregated, _ = super().aggregate_evaluate(server_round, results, failures)
 
         # Log metrics to TensorBoard
-        self.writer.add_scalar('federated/loss', loss_aggregated, server_round)
-        self.writer.add_scalar('federated/accuracy', avg_accuracy, server_round)
-        self.writer.add_scalar('federated/auc', avg_auc, server_round)
+        self.writer.add_scalar("federated/loss", loss_aggregated, server_round)
+        self.writer.add_scalar("federated/accuracy", avg_accuracy, server_round)
+        self.writer.add_scalar("federated/auc", avg_auc, server_round)
 
-        return loss_aggregated, {
-            "accuracy": float(avg_accuracy),
-            "auc": float(avg_auc)
-        }
+        return loss_aggregated, {"accuracy": float(avg_accuracy), "auc": float(avg_auc)}
 
     def evaluate(self, server_round, parameters):
         """Run centralized evaluation and log results."""
         parameters_ndarrays = parameters_to_ndarrays(parameters)
-        loss, metrics, run_config = self.evaluate_fn(server_round, parameters_ndarrays, {})
-        
+        loss, metrics, run_config = self.evaluate_fn(
+            server_round, parameters_ndarrays, {}
+        )
+
         # Log centralized metrics
-        self.writer.add_scalar('centralized/loss', loss, server_round)
-        self.writer.add_scalar('centralized/accuracy', metrics["accuracy"], server_round)
-        self.writer.add_scalar('centralized/auc', metrics["auc"], server_round)
-        
+        self.writer.add_scalar("centralized/loss", loss, server_round)
+        self.writer.add_scalar(
+            "centralized/accuracy", metrics["accuracy"], server_round
+        )
+        self.writer.add_scalar("centralized/auc", metrics["auc"], server_round)
+
         # Update best model
         self.update_best_model(server_round, metrics, parameters, run_config)
 
@@ -84,5 +92,5 @@ class CustomFedAvg(FedAvg):
 
     def __del__(self):
         """Ensure proper cleanup of TensorBoard writer."""
-        if hasattr(self, 'writer'):
+        if hasattr(self, "writer"):
             self.writer.close()

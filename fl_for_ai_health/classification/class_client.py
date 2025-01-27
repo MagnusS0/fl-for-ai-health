@@ -4,13 +4,13 @@ import torch
 
 from flwr.client import ClientApp, NumPyClient
 from flwr.common import Context, ConfigsRecord
-from fl_for_ai_health.classification.medmnist_task import(
-    get_weights, 
-    load_data, 
-    set_weights, 
-    test, 
+from fl_for_ai_health.classification.medmnist_task import (
+    get_weights,
+    load_data,
+    set_weights,
+    test,
     train,
-    load_model
+    load_model,
 )
 
 
@@ -60,11 +60,7 @@ def client_fn(context: Context):
     partition_id = context.node_config["partition-id"]
     num_partitions = context.node_config["num-partitions"]
 
-    trainloader, valloader = load_data(
-        partition_id, 
-        num_partitions, 
-        split="train"
-    )
+    trainloader, valloader = load_data(partition_id, num_partitions, split="train")
     net = load_model(context.run_config)
     local_epochs = context.run_config["local-epochs"]
 

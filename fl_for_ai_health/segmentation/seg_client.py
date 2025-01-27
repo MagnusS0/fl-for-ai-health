@@ -3,7 +3,15 @@
 import torch
 from flwr.client import ClientApp, NumPyClient
 from flwr.common import Context, ConfigsRecord
-from fl_for_ai_health.segmentation.brats_task import get_weights, load_data, set_weights, test, train, load_model
+from fl_for_ai_health.segmentation.brats_task import (
+    get_weights,
+    load_data,
+    set_weights,
+    test,
+    train,
+    load_model,
+)
+
 
 class FlowerClient(NumPyClient):
     def __init__(self, net, trainloader, valloader, local_epochs, context: Context):
@@ -23,11 +31,7 @@ class FlowerClient(NumPyClient):
         set_weights(self.net, parameters)
 
         train_loss = train(
-            self.net,
-            self.trainloader,
-            self.local_epochs,
-            self.device,
-            self.run_config
+            self.net, self.trainloader, self.local_epochs, self.device, self.run_config
         )
 
         fit_metrics = self.client_state.configs_records["fit_metrics"]
@@ -35,7 +39,7 @@ class FlowerClient(NumPyClient):
             fit_metrics["train_loss_hist"] = [train_loss]
         else:
             fit_metrics["train_loss_hist"].append(train_loss)
-    
+
         return (
             get_weights(self.net),
             len(self.trainloader.dataset),
@@ -44,24 +48,25 @@ class FlowerClient(NumPyClient):
 
     def evaluate(self, parameters, config):
         set_weights(self.net, parameters)
-        loss, dice_score, iou_score = test(self.net, self.valloader, self.device, self.run_config)
-        
-        return loss, len(self.valloader.dataset), {
-            "dice": dice_score, 
-            "iou": iou_score
-        }
+        loss, dice_score, iou_score = test(
+            self.net, self.valloader, self.device, self.run_config
+        )
+
+        return loss, len(self.valloader.dataset), {"dice": dice_score, "iou": iou_score}
+
 
 def client_fn(context: Context):
     # Load data
     partition_id = context.node_config["partition-id"]
     num_partitions = context.node_config["num-partitions"]
     trainloader, valloader = load_data(partition_id, num_partitions, context.run_config)
-    
+
     # Initialize model with context parameters
     net = load_model(context.run_config)
-    
+
     local_epochs = context.run_config["local-epochs"]
     return FlowerClient(net, trainloader, valloader, local_epochs, context).to_client()
+
 
 # Flower ClientApp
 app = ClientApp(

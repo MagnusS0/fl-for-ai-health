@@ -1,20 +1,38 @@
 import torch
 from torch import nn
 
+
 class DefaultConv2d(nn.Conv2d):
     """
     Default convolutional layer with padding and initialization.
-    
+
     Uses He normal initialization for the weights.
     """
-    def __init__(self, in_channels, out_channels, kernel_size=3, stride=1, padding='same', use_bias=False, init_type='he_normal'):
-        if padding == 'same':
+
+    def __init__(
+        self,
+        in_channels,
+        out_channels,
+        kernel_size=3,
+        stride=1,
+        padding="same",
+        use_bias=False,
+        init_type="he_normal",
+    ):
+        if padding == "same":
             padding = kernel_size // 2
         else:
             padding = 0
-        super(DefaultConv2d, self).__init__(in_channels, out_channels, kernel_size=kernel_size, stride=stride, padding=padding, bias=use_bias)
-        if init_type == 'he_normal':
-            nn.init.kaiming_normal_(self.weight, mode='fan_out', nonlinearity='relu')
+        super(DefaultConv2d, self).__init__(
+            in_channels,
+            out_channels,
+            kernel_size=kernel_size,
+            stride=stride,
+            padding=padding,
+            bias=use_bias,
+        )
+        if init_type == "he_normal":
+            nn.init.kaiming_normal_(self.weight, mode="fan_out", nonlinearity="relu")
         else:
             nn.init.xavier_normal_(self.weight)
 
@@ -24,13 +42,16 @@ class DefaultConv2d(nn.Conv2d):
     def forward(self, x):
         x = super(DefaultConv2d, self).forward(x)
         return x
-        
+
 
 class ResidualBlock(nn.Module):
     """
     Residual block with ReLU activation.
     """
-    def __init__(self, in_channels, out_channels, strides=1, activation=nn.ReLU(), **kwargs):
+
+    def __init__(
+        self, in_channels, out_channels, strides=1, activation=nn.ReLU(), **kwargs
+    ):
         super(ResidualBlock, self).__init__(**kwargs)
         self.strides = strides
         self.in_channels = in_channels
@@ -41,26 +62,27 @@ class ResidualBlock(nn.Module):
             nn.BatchNorm2d(out_channels),
             activation,
             DefaultConv2d(out_channels, out_channels),
-            nn.BatchNorm2d(out_channels)
+            nn.BatchNorm2d(out_channels),
         )
 
         self.skip_layers = nn.Sequential()
         if strides > 1 or in_channels != out_channels:
             self.skip_layers = nn.Sequential(
                 DefaultConv2d(in_channels, out_channels, kernel_size=1, stride=strides),
-                nn.BatchNorm2d(out_channels)
+                nn.BatchNorm2d(out_channels),
             )
 
     def forward(self, x):
         main = self.main_layers(x)
         skip = self.skip_layers(x)
         return self.activation(main + skip)
-    
+
 
 class ResNet18(nn.Module):
     """
     ResNet18 model with default convolutional layers and ReLU activation.
     """
+
     def __init__(self, in_channels=3, num_classes=10):
         super(ResNet18, self).__init__()
         self.conv1 = DefaultConv2d(in_channels, 64, kernel_size=7, stride=2, padding=3)
@@ -92,7 +114,8 @@ class ResNet18(nn.Module):
         x = self.fc(x)
         x = nn.functional.softmax(x, dim=1)
         return x
-    
+
+
 if __name__ == "__main__":
     model = ResNet18()
     # Print model architecture
