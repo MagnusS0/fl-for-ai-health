@@ -55,7 +55,7 @@ model="u-net" or "segformer"
 flwr run .
 ```
 
-On the first run this will build the dataset from 3D to 2D axial slices this mike take some time.
+On the first run this will build the dataset from 3D to 2D axial slices this might take some time.
 On connecutive runs this will run much faster. Alternativly run the dataset script first.
 
 ## Configuration
