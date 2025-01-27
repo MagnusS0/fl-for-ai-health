@@ -24,6 +24,7 @@ class FlowerClient(NumPyClient):
         self.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
         self.net.to(self.device)
         self.client_state = context.state
+        self.run_config = context.run_config
 
         if "fit_metrics" not in self.client_state.configs_records:
             self.client_state.configs_records["fit_metrics"] = ConfigsRecord()
@@ -51,7 +52,7 @@ class FlowerClient(NumPyClient):
 
     def evaluate(self, parameters, config):
         set_weights(self.net, parameters)
-        loss, accuracy, auc = test(self.net, self.valloader, self.device)
+        loss, accuracy, auc = test(self.net, self.valloader, self.device, self.run_config)
         return loss, len(self.valloader.dataset), {"accuracy": accuracy, "auc": auc}
 
 

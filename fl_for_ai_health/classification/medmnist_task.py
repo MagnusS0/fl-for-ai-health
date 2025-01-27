@@ -10,7 +10,7 @@ from flwr_datasets import FederatedDataset
 from flwr_datasets.partitioner import IidPartitioner
 from torch.utils.data import DataLoader
 from torchvision.transforms import Compose, Normalize, ToTensor
-from sklearn.metrics import roc_auc_score
+from torchmetrics import AUROC, Accuracy
 import numpy as np
 from typing import Dict
 from models.resnet.resnet18 import ResNet18
@@ -64,19 +64,19 @@ def load_data(partition_id: int, num_partitions: int, split: str = "train"):
     return trainloader, testloader
 
 
-scaler = GradScaler()  # Gradient scaling for mixed precision training
-
-
 def train(net, trainloader, epochs, device):
     """Train the model on the training set."""
-    net.to(device)  # move model to GPU if available
+    net.to(device)
+
     criterion = torch.nn.CrossEntropyLoss().to(device)
-    optimizer = torch.optim.SGD(net.parameters(), lr=0.001, momentum=0.9)
-    scheduler = torch.optim.lr_scheduler.OneCycleLR(
-        optimizer, max_lr=0.001, total_steps=len(trainloader) * epochs
-    )
+    optimizer = torch.optim.SGD(net.parameters(), lr=3e-4, momentum=0.9)
+    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, epochs, eta_min=0.0001)
+
     net.train()
+
+    scaler = GradScaler(device=device.type)
     running_loss = 0.0
+
     for _ in range(epochs):
         for batch in trainloader:
             images = batch["image"]
@@ -96,40 +96,34 @@ def train(net, trainloader, epochs, device):
     return avg_trainloss
 
 
-def test(net, testloader, device):
+def test(net, testloader, device, run_config):
     """Validate the model on the test set."""
     net.to(device)
+    net.eval()
+
+    # Initialize metrics
+    auroc = AUROC(task="multiclass", num_classes=run_config["num-classes"]).to(device)
+    accuracy = Accuracy(task="multiclass", num_classes=run_config["num-classes"]).to(device)
+
     criterion = torch.nn.CrossEntropyLoss()
-    correct, loss = 0, 0.0
-    all_probs = []
-    all_labels = []
+    loss = 0.0
+
     with torch.no_grad():
         for batch in testloader:
             images = batch["image"].to(device)
             labels = batch["label"].to(device)
+
             outputs = net(images)
-            probs = F.softmax(outputs, dim=1)
             loss += criterion(outputs, labels).item()
-            correct += (torch.max(outputs.data, 1)[1] == labels).sum().item()
 
-            # Store probabilities and labels for AUC calculation
-            all_probs.extend(probs.cpu().numpy())
-            all_labels.extend(labels.cpu().numpy())
+            auroc.update(outputs, labels)
+            accuracy.update(outputs, labels)
 
-    accuracy = correct / len(testloader.dataset)
     loss = loss / len(testloader)
-    accuracy = correct / len(testloader.dataset)
+    auroc = auroc.compute().item()
+    accuracy = accuracy.compute().item()
 
-    # Calculate AUC (handles both binary and multiclass cases)
-    try:
-        if len(np.unique(all_labels)) == 2:
-            auc = roc_auc_score(all_labels, np.array(all_probs)[:, 1])
-        else:  # Multi-class classification
-            auc = roc_auc_score(all_labels, all_probs, multi_class="ovr")
-    except ValueError:
-        auc = float("nan")
-
-    return loss, accuracy, auc
+    return loss, accuracy, auroc
 
 
 def get_weights(net):
