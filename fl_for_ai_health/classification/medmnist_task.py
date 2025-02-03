@@ -8,11 +8,12 @@ import torch.nn.functional as F
 from torch.amp import autocast, GradScaler
 from flwr_datasets import FederatedDataset
 from flwr_datasets.partitioner import IidPartitioner
+from datasets import load_from_disk
 from torch.utils.data import DataLoader
 from torchvision.transforms import Compose, Normalize, ToTensor
 from torchmetrics import AUROC, Accuracy
 import numpy as np
-from typing import Dict
+from typing import Dict, Tuple
 from models.resnet.resnet18 import ResNet18
 from models.tiny_vit.tiny_vit import tiny_vit_5m_224
 
@@ -33,35 +34,62 @@ def load_model(run_config: Dict) -> nn.Module:
         raise ValueError(f"Model {run_config['model']} not supported")
 
 
-fds = None  # Cache FederatedDataset
-
-
-def load_data(partition_id: int, num_partitions: int, split: str = "train"):
-    """Load partition MedMNIST data."""
-    # Only initialize `FederatedDataset` once
-    global fds
-    if fds is None:
-        partitioner = IidPartitioner(num_partitions=num_partitions)
-        fds = FederatedDataset(
-            dataset="MagnusSa/medmnist",
-            partitioners={split: partitioner},
+class MedMNISTDatasetCache:
+    """Class-based cache for MedMNIST dataset."""
+    
+    def __init__(self):
+        self._dataset = None
+        self._from_disk = False
+    
+    def initialize(self, partition_id: int, num_partitions: int, split: str = "train", from_disk: bool = False) -> None:
+        """Initialize the dataset cache."""
+        self._from_disk = from_disk
+        
+        if from_disk:
+            path = f"./data/medmnist/MagnusSa/medmnist_part_{partition_id + 1}"
+            self._dataset = load_from_disk(path)
+        else:
+            if not self._dataset:
+                partitioner = IidPartitioner(num_partitions=num_partitions)
+                fds = FederatedDataset(
+                    dataset="MagnusSa/medmnist",
+                    partitioners={split: partitioner},
+                )
+                partition = fds.load_partition(partition_id)
+                self._dataset = partition.train_test_split(test_size=0.2, seed=42)
+    
+    def create_loaders(self, batch_size: int = 32) -> Tuple[DataLoader, DataLoader]:
+        """Create data loaders from cached dataset."""
+        if self._dataset is None:
+            raise RuntimeError("Dataset cache not initialized")
+            
+        pytorch_transforms = Compose(
+            [ToTensor(), Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))]
         )
-    partition = fds.load_partition(partition_id)
-    # Divide data on each node: 80% train, 20% test
-    partition_train_test = partition.train_test_split(test_size=0.2, seed=42)
-    pytorch_transforms = Compose(
-        [ToTensor(), Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))]
-    )
 
-    def apply_transforms(batch):
-        """Apply transforms to the partition from FederatedDataset."""
-        batch["image"] = [pytorch_transforms(img) for img in batch["image"]]
-        return batch
+        def apply_transforms(batch):
+            batch["image"] = [pytorch_transforms(img) for img in batch["image"]]
+            return batch
 
-    partition_train_test = partition_train_test.with_transform(apply_transforms)
-    trainloader = DataLoader(partition_train_test["train"], batch_size=32, shuffle=True)
-    testloader = DataLoader(partition_train_test["test"], batch_size=32)
-    return trainloader, testloader
+        transformed_dataset = self._dataset.with_transform(apply_transforms)
+        
+        trainloader = DataLoader(
+            transformed_dataset["train"], 
+            batch_size=batch_size, 
+            shuffle=True
+        )
+        testloader = DataLoader(
+            transformed_dataset["test"], 
+            batch_size=batch_size
+        )
+        return trainloader, testloader
+
+_dataset_cache = MedMNISTDatasetCache()
+
+def load_data(partition_id: int, num_partitions: int, split: str = "train", from_disk: bool = False):
+    """Load partition MedMNIST data."""
+    _dataset_cache.initialize(partition_id, num_partitions, split, from_disk)
+    return _dataset_cache.create_loaders()
 
 
 def train(net, trainloader, epochs, device):
