@@ -69,7 +69,7 @@ def train(net, trainloader, epochs, device):
     net.to(device)
 
     criterion = torch.nn.CrossEntropyLoss().to(device)
-    optimizer = torch.optim.SGD(net.parameters(), lr=3e-4, momentum=0.9)
+    optimizer = torch.optim.AdamW(net.parameters(), lr=3e-4)
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, epochs, eta_min=0.0001)
 
     net.train()
