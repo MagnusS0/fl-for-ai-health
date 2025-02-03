@@ -1,49 +1,26 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from torchmetrics.classification import F1Score, BinaryF1Score
 
 
 class DiceLoss(nn.Module):
     """Dice Loss for image segmentation"""
 
-    def __init__(self, smooth=1e-5, ignore_index=0):
+    def __init__(self, smooth=1e-5, ignore_index=0, num_classes=4, device=None):
         super().__init__()
+        self.num_classes = num_classes
         self.smooth = smooth
         self.ignore_index = ignore_index
+        self.f1_score = F1Score(task="multiclass", num_classes=num_classes, average="macro").to(device)
+        self.binary_f1_score = BinaryF1Score().to(device)
 
     def forward(self, outputs, targets):
-        num_classes = outputs.shape[1]
-        if num_classes > 1:
+        if self.num_classes > 1:
             outputs = F.softmax(outputs, dim=1)
-            # Labels to one-hot format
-            targets_one_hot = (
-                F.one_hot(targets, num_classes=num_classes).permute(0, 3, 1, 2).float()
-            )
-
-            dice_loss = 0.0
-            valid_classes = 0
-            for class_index in range(num_classes):
-                if class_index == self.ignore_index:
-                    continue
-                output_class = outputs[:, class_index, :, :]
-                target_class = targets_one_hot[:, class_index, :, :]
-                intersection = (output_class * target_class).sum()
-                cardinality = output_class.sum() + target_class.sum()
-                dice_score = (2.0 * intersection + self.smooth) / (
-                    cardinality + self.smooth
-                )
-                dice_loss += 1.0 - dice_score
-                valid_classes += 1
-            return dice_loss / valid_classes  # Average over non-background classes
-
-        else:  # Binary case
-            outputs = torch.sigmoid(outputs).squeeze(1)  # Squeeze to [B, H, W]
-            intersection = (outputs * targets).sum()
-            cardinality = outputs.sum() + targets.sum()
-            dice_score = (2.0 * intersection + self.smooth) / (
-                cardinality + self.smooth
-            )
-            return 1.0 - dice_score
+            return 1.0 - self.f1_score(outputs, targets) + self.smooth
+        else:
+            return 1.0 - self.binary_f1_score(outputs, targets) + self.smooth
 
 
 class FocalLoss(nn.Module):
@@ -52,7 +29,7 @@ class FocalLoss(nn.Module):
     def __init__(self, gamma=2, alpha=None, reduction="mean"):
         super().__init__()
         self.gamma = gamma
-        self.alpha = alpha
+        self.alpha = alpha if alpha is None else torch.tensor(alpha)
         self.reduction = reduction
         self.cross_entropy = nn.CrossEntropyLoss(reduction="none")
 
@@ -62,7 +39,7 @@ class FocalLoss(nn.Module):
         focal_loss = (1 - pt) ** self.gamma * ce_loss
 
         if self.alpha is not None:
-            alpha_t = self.alpha[targets]  # Get alpha for each target class
+            alpha_t = self.alpha.to(targets.device)[targets.view(-1)].view(targets.shape)
             focal_loss = alpha_t * focal_loss
 
         if self.reduction == "mean":
@@ -74,7 +51,19 @@ class FocalLoss(nn.Module):
 
 
 class DiceFocalLoss(nn.Module):
-    """Dice Focal Loss combines Dice Loss and Focal Loss"""
+    """
+    Dice Focal Loss combines Dice Loss and Focal Loss
+    
+    Args:
+        lambda_dice (float): Weight for Dice Loss
+        lambda_focal (float): Weight for Focal Loss
+        dice_smooth (float): Smoothing factor for Dice Loss
+        focal_gamma (float): Gamma parameter for Focal Loss
+        focal_alpha (float): Alpha parameter for Focal Loss
+        num_classes (int): Number of classes
+        ignore_index (int): Index to ignore in loss calculation
+        device (str): Device to use for loss calculation
+    """
 
     def __init__(
         self,
@@ -83,11 +72,14 @@ class DiceFocalLoss(nn.Module):
         dice_smooth=1e-5,
         focal_gamma=2,
         focal_alpha=None,
+        num_classes=4,
+        ignore_index=0,
+        device=None,
     ):
         super().__init__()
         self.lambda_dice = lambda_dice
         self.lambda_focal = lambda_focal
-        self.dice_loss = DiceLoss(smooth=dice_smooth, ignore_index=0)
+        self.dice_loss = DiceLoss(smooth=dice_smooth, ignore_index=ignore_index, num_classes=num_classes, device=device)
         self.focal_loss = FocalLoss(
             gamma=focal_gamma, alpha=focal_alpha, reduction="mean"
         )
