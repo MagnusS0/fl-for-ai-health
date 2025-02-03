@@ -2,7 +2,7 @@
 
 import torch
 from flwr.client import ClientApp, NumPyClient
-from flwr.common import Context, ConfigsRecord
+from flwr.common import Context, ConfigsRecord, ParametersRecord
 from fl_for_ai_health.segmentation.brats_task import (
     get_weights,
     load_data,
@@ -11,6 +11,7 @@ from fl_for_ai_health.segmentation.brats_task import (
     train,
     load_model,
 )
+import pickle
 
 
 class FlowerClient(NumPyClient):
@@ -20,7 +21,7 @@ class FlowerClient(NumPyClient):
         self.trainloader = trainloader
         self.valloader = valloader
         self.local_epochs = local_epochs
-        self.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.net.to(self.device)
         self.run_config = context.run_config
 
@@ -30,20 +31,27 @@ class FlowerClient(NumPyClient):
     def fit(self, parameters, config):
         set_weights(self.net, parameters)
 
-        train_loss = train(
-            self.net, self.trainloader, self.local_epochs, self.device, self.run_config
-        )
+        # Get scheduler state from previous round (sent by server)
+        scheduler_state = None
+        
+        # Check if both states exist in config
+        if "scheduler_state_bytes" in config:
+            if config["scheduler_state_bytes"]:
+                scheduler_state = pickle.loads(config["scheduler_state_bytes"])
 
-        fit_metrics = self.client_state.configs_records["fit_metrics"]
-        if "train_loss_hist" not in fit_metrics:
-            fit_metrics["train_loss_hist"] = [train_loss]
-        else:
-            fit_metrics["train_loss_hist"].append(train_loss)
+        # Training with potential previous state
+        train_loss, new_scheduler_state = train(
+            self.net, self.trainloader, self.local_epochs, 
+            self.device, self.run_config, scheduler_state
+        )
 
         return (
             get_weights(self.net),
             len(self.trainloader.dataset),
-            {"train_loss": train_loss},
+            {
+                "train_loss": train_loss,
+                "scheduler_state_bytes": pickle.dumps(new_scheduler_state) if new_scheduler_state else b"",
+            },
         )
 
     def evaluate(self, parameters, config):
