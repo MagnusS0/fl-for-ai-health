@@ -57,3 +57,4 @@ if __name__ == "__main__":
         f"Expected shape (1, 1, 64, 64), but got {y.shape}"
     )
     print(y.shape)
+    print(sum(p.numel() for p in model.parameters()))

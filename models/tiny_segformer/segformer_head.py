@@ -6,7 +6,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-
+from collections import OrderedDict
 
 class SimpleConvModule(nn.Module):
     """
@@ -24,24 +24,23 @@ class SimpleConvModule(nn.Module):
         act_layer=nn.ReLU,
     ):
         super().__init__()
-        layers = []
-        layers.append(
-            nn.Conv2d(
-                in_channels,
-                out_channels,
-                kernel_size,
-                stride,
-                padding,
-                bias=not norm_layer,
-            )
+        layers = OrderedDict()
+        layers['conv'] = nn.Conv2d(
+            in_channels,
+            out_channels,
+            kernel_size,
+            stride,
+            padding,
+            bias=not norm_layer,
         )
 
         if norm_layer:
-            layers.append(norm_layer(out_channels))
+            layers['bn'] = norm_layer(out_channels)
 
         if act_layer:
-            layers.append(act_layer(inplace=True))
-        self.conv_block = nn.Sequential(*layers)
+            layers['act'] = act_layer(inplace=True)
+
+        self.conv_block = nn.Sequential(layers)
 
     def forward(self, x):
         return self.conv_block(x)

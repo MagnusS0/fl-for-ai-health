@@ -6,7 +6,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-
+from collections import OrderedDict
 
 class ConvDouble(nn.Module):
     """
@@ -16,17 +16,19 @@ class ConvDouble(nn.Module):
 
     def __init__(self, in_channels, out_channels):
         super().__init__()
-        self.conv_double = nn.Sequential(
-            nn.Conv2d(in_channels, out_channels, kernel_size=3, padding=1),
-            nn.BatchNorm2d(out_channels),
-            nn.ReLU(),
-            nn.Conv2d(out_channels, out_channels, kernel_size=3, padding=1),
-            nn.BatchNorm2d(out_channels),
-            nn.ReLU(),
-        )
+        layers = OrderedDict()
+        layers['conv1'] = nn.Conv2d(in_channels, out_channels, kernel_size=3, padding=1)
+        layers['bn1'] = nn.BatchNorm2d(out_channels)
+        layers['act1'] = nn.ReLU()
+        layers['conv2'] = nn.Conv2d(out_channels, out_channels, kernel_size=3, padding=1)
+        layers['bn2'] = nn.BatchNorm2d(out_channels)
+        layers['act2'] = nn.ReLU()
+
+        self.conv_double = nn.Sequential(layers)
 
     def forward(self, x):
         return self.conv_double(x)
+
 
 
 class DownPool(nn.Module):
@@ -115,3 +117,12 @@ class UNet(nn.Module):
         x = self.up2(x, x2)
         x = self.up3(x, x1)
         return self.out_conv(x)
+
+
+if __name__ == "__main__":
+    model = UNet(in_channels=1, num_classes=4)
+    print(model)
+    x = torch.randn(1, 1, 64, 64)
+    y = model(x)
+    print(y.shape)
+    print(sum(p.numel() for p in model.parameters()))

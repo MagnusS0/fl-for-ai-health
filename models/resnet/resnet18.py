@@ -1,5 +1,6 @@
 import torch
 from torch import nn
+from collections import OrderedDict
 
 
 class DefaultConv2d(nn.Conv2d):
@@ -57,20 +58,22 @@ class ResidualBlock(nn.Module):
         self.in_channels = in_channels
         self.out_channels = out_channels
         self.activation = activation
-        self.main_layers = nn.Sequential(
-            DefaultConv2d(in_channels, out_channels, stride=strides),
-            nn.BatchNorm2d(out_channels),
-            activation,
-            DefaultConv2d(out_channels, out_channels),
-            nn.BatchNorm2d(out_channels),
-        )
 
+        main_layers = OrderedDict()
+        main_layers['conv1'] = DefaultConv2d(in_channels, out_channels, stride=strides)
+        main_layers['bn1'] = nn.BatchNorm2d(out_channels)
+        main_layers['act1'] = activation
+        main_layers['conv2'] = DefaultConv2d(out_channels, out_channels)
+        main_layers['bn2'] = nn.BatchNorm2d(out_channels)
+        self.main_layers = nn.Sequential(main_layers)
+
+        # Skip layers with named layers
         self.skip_layers = nn.Sequential()
         if strides > 1 or in_channels != out_channels:
-            self.skip_layers = nn.Sequential(
-                DefaultConv2d(in_channels, out_channels, kernel_size=1, stride=strides),
-                nn.BatchNorm2d(out_channels),
-            )
+            skip_layers = OrderedDict()
+            skip_layers['conv'] = DefaultConv2d(in_channels, out_channels, kernel_size=1, stride=strides)
+            skip_layers['bn'] = nn.BatchNorm2d(out_channels)
+            self.skip_layers = nn.Sequential(skip_layers)
 
     def forward(self, x):
         main = self.main_layers(x)
