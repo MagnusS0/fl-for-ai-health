@@ -19,7 +19,8 @@ dependencies = [
     "numpy==1.26.4",
     "torchmetrics==1.6.1",
     "python-dotenv==1.0.1", 
-    "tensorboard==2.18.0",  
+    "tensorboard==2.18.0",
+    "h5py==3.12.1",  
 
 ]
 
@@ -27,7 +28,7 @@ dependencies = [
 packages = ["."]
 
 [tool.flwr.app]
-publisher = "Magnus"
+publisher = "Magnus Samuelsen"
 
 [tool.flwr.app.components]
 # Uncomment the task you want to run
@@ -37,30 +38,31 @@ serverapp = "fl_for_ai_health.classification.class_server:app"
 clientapp = "fl_for_ai_health.classification.class_client:app"
 
 # Segmentation
-# serverapp = "fl_for_ai_health.segmentation.seg_server:app"
-# clientapp = "fl_for_ai_health.segmentation.seg_client:app"
+#serverapp = "fl_for_ai_health.segmentation.seg_server:app"
+#clientapp = "fl_for_ai_health.segmentation.seg_client:app"
 
 [tool.flwr.app.config]
-num-server-rounds = 10
+num-server-rounds = 20
 fraction-fit = 0.5
 local-epochs = 1
 data-dir = "/home/magnus//Datasets/Images/MedicalDecathlon/Task01_BrainTumour"
 dataset-json-path = "/home/magnus/Datasets/Images/MedicalDecathlon/Task01_BrainTumour/dataset.json"
+from-disk = "True"
 in-channels = 3
 num-classes = 9
-img-size = 64
-batch-size = 64
-learning-rate = 4e-3
-weight-decay = 1e-6
+img-size = 96
+batch-size = 16
+learning-rate = 3e-4
+weight-decay = 1e-4
 val-split = 0.2
 num-workers = 4
-tb_run_name = "TinyViT"
-model="tiny-vit"
+tb_run_name = "ResNet"
+model="resnet-18"
 
 [tool.flwr.federations]
 default = "local-simulation"
 
 [tool.flwr.federations.local-simulation]
-options.num-supernodes = 10
+options.num-supernodes = 4
 options.backend.client-resources.num-cpus = 4 # each ClientApp assumes to use 1 CPU (default is 2)
 options.backend.client-resources.num-gpus = 0.25

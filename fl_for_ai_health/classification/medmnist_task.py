@@ -44,7 +44,7 @@ class MedMNISTDatasetCache:
         self._from_disk = from_disk
         
         if from_disk:
-            path = f"./data/medmnist/MagnusSa/medmnist_part_{partition_id + 1}"
+            path = f"./data/medmnist/medmnist_part_{partition_id + 1}"
             self._dataset = load_from_disk(path)
         else:
             if not self._dataset:

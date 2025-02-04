@@ -61,7 +61,7 @@ def client_fn(context: Context):
     partition_id = context.node_config["partition-id"]
     num_partitions = context.node_config["num-partitions"]
 
-    trainloader, valloader = load_data(partition_id, num_partitions, split="train")
+    trainloader, valloader = load_data(partition_id, num_partitions, split="train", from_disk=context.run_config["from-disk"])
     net = load_model(context.run_config)
     local_epochs = context.run_config["local-epochs"]
 
