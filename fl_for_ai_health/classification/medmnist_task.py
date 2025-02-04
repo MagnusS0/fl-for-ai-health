@@ -4,15 +4,13 @@ from collections import OrderedDict
 
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 from torch.amp import autocast, GradScaler
 from flwr_datasets import FederatedDataset
 from flwr_datasets.partitioner import IidPartitioner
 from datasets import load_from_disk
 from torch.utils.data import DataLoader
 from torchvision.transforms import Compose, Normalize, ToTensor
-from torchmetrics import AUROC, Accuracy
-import numpy as np
+from torchmetrics.classification import MulticlassAUROC, MulticlassAccuracy, MulticlassF1Score
 from typing import Dict, Tuple
 from models.resnet.resnet18 import ResNet18
 from models.tiny_vit.tiny_vit import tiny_vit_5m_224
@@ -130,8 +128,9 @@ def test(net, testloader, device, run_config):
     net.eval()
 
     # Initialize metrics
-    auroc = AUROC(task="multiclass", num_classes=run_config["num-classes"]).to(device)
-    accuracy = Accuracy(task="multiclass", num_classes=run_config["num-classes"]).to(device)
+    auroc = MulticlassAUROC(num_classes=run_config["num-classes"]).to(device)
+    accuracy = MulticlassAccuracy(num_classes=run_config["num-classes"]).to(device)
+    f1_score = MulticlassF1Score(num_classes=run_config["num-classes"]).to(device)
 
     criterion = torch.nn.CrossEntropyLoss()
     loss = 0.0
@@ -146,12 +145,14 @@ def test(net, testloader, device, run_config):
 
             auroc.update(outputs, labels)
             accuracy.update(outputs, labels)
+            f1_score.update(outputs, labels)
 
     loss = loss / len(testloader)
     auroc = auroc.compute().item()
     accuracy = accuracy.compute().item()
+    f1_score = f1_score.compute().item()
 
-    return loss, accuracy, auroc
+    return loss, accuracy, auroc, f1_score
 
 
 def get_weights(net):

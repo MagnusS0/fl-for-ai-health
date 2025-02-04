@@ -52,8 +52,8 @@ class FlowerClient(NumPyClient):
 
     def evaluate(self, parameters, config):
         set_weights(self.net, parameters)
-        loss, accuracy, auc = test(self.net, self.valloader, self.device, self.run_config)
-        return loss, len(self.valloader.dataset), {"accuracy": accuracy, "auc": auc}
+        loss, accuracy, auc, f1_score = test(self.net, self.valloader, self.device, self.run_config)
+        return loss, len(self.valloader.dataset), {"accuracy": accuracy, "auc": auc, "f1_score": f1_score}
 
 
 def client_fn(context: Context):
