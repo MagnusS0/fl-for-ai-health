@@ -2,14 +2,26 @@ import argparse
 import json
 import os
 import shutil
+import h5py
 from sklearn.model_selection import train_test_split
 from collections import defaultdict
 from tqdm import tqdm
 
+def get_volume_info(h5_path):
+    """Extract metadata from H5 file"""
+    with h5py.File(h5_path, 'r') as f:
+        labels_present = set()
+        num_slices = len(f['labels'])
+        for i in range(num_slices):
+            slice_labels = set(map(int, set(f['labels'][f'slice_{i}'][:].flatten())))
+            if 0 in slice_labels:
+                slice_labels.remove(0)
+            labels_present.update(slice_labels)
+    return {'num_slices': num_slices, 'labels_present': labels_present}
+
 def main():
     parser = argparse.ArgumentParser(description='Split BRATS dataset into client partitions')
     parser.add_argument('--data-dir', required=True, help='Base directory for dataset')
-    parser.add_argument('--dataset-json-path', required=True, help='Path to dataset.json')
     parser.add_argument('--num-clients', type=int, required=True, help='Number of client partitions')
     parser.add_argument('--modalities', default='FLAIR_T1w_t1gd_T2w', help='Imaging modalities to use')
     parser.add_argument('--copy', action='store_true', help='Copy files instead of moving')
@@ -17,23 +29,22 @@ def main():
     parser.add_argument('--seed', type=int, default=42, help='Random seed')
     args = parser.parse_args()
 
-    # Load original training metadata
-    train_dir = os.path.join(os.path.dirname(args.data_dir), 
-                             f'preprocessed_{args.modalities}_{args.slice_dir}_train')
-    metadata_path = os.path.join(train_dir, 'metadata.json')
-    with open(metadata_path, 'r') as f:
-        metadata = json.load(f)
-
-    # Group slices by volume
-    volume_stats = defaultdict(lambda: {'slices': [], 'labels': set()})
-    for entry in metadata:
-        vol_idx = entry['volume_idx']
-        volume_stats[vol_idx]['slices'].append(entry)
-        volume_stats[vol_idx]['labels'].update(entry['labels_present'])
+    # Get all H5 files in the directory
+    h5_files = [f for f in os.listdir(args.data_dir) if f.endswith('.h5')]
+    
+    # Group volumes and collect metadata
+    volume_stats = {}
+    for h5_file in tqdm(h5_files, desc='Analyzing volumes'):
+        vol_idx = int(h5_file.split('_')[1].split('.')[0])
+        h5_path = os.path.join(args.data_dir, h5_file)
+        volume_stats[vol_idx] = {
+            'file_path': h5_path,
+            **get_volume_info(h5_path)
+        }
 
     # Prepare for stratified split
     volume_indices = list(volume_stats.keys())
-    strat_labels = ['_'.join(sorted(map(str, volume_stats[v]['labels']))) 
+    strat_labels = ['_'.join(sorted(map(str, volume_stats[v]['labels_present']))) 
                     for v in volume_indices]
 
     # Split volumes into client partitions
@@ -54,43 +65,50 @@ def main():
         remaining_labels = [strat_labels[volume_indices.index(v)] for v in train_vols]
     client_volumes[-1] = remaining_vols
 
-    # Create client directories
+    # Create client directories and move files
     base_dir = os.path.dirname(args.data_dir)
     for client_id, vols in enumerate(client_volumes):
         client_dir = os.path.join(base_dir, 
-                                  f'preprocessed_{args.modalities}_{args.slice_dir}_client_{client_id}')
+                                f'preprocessed_{args.modalities}_{args.slice_dir}_client_{client_id}')
         os.makedirs(client_dir, exist_ok=True)
         
-        client_metadata = []
-        for vol in tqdm(vols, desc=f'Processing client {client_id} volumes'):
-            client_metadata.extend(volume_stats[vol]['slices'])
+        # Prepare client metadata
+        client_metadata = {
+            'volumes': [],
+            'total_slices': 0,
+            'label_distribution': defaultdict(int)
+        }
         
-        # Move image and label files
-        for slice_entry in tqdm(client_metadata, desc=f'Moving files for client {client_id}', leave=False):
-            # Process image files
-            original_image_path = slice_entry["image_path"]
-            new_image_path = os.path.join(client_dir, os.path.basename(original_image_path))
+        # Move H5 files and update metadata
+        for vol_idx in tqdm(vols, desc=f'Processing client {client_id}'):
+            vol_info = volume_stats[vol_idx]
+            src_path = vol_info['file_path']
+            dst_path = os.path.join(client_dir, os.path.basename(src_path))
+            
             if args.copy:
-                shutil.copy2(original_image_path, new_image_path)
+                shutil.copy2(src_path, dst_path)
             else:
-                shutil.move(original_image_path, new_image_path)
-            slice_entry["image_path"] = new_image_path
-
-            # Process label file
-            original_label_path = slice_entry["label_path"]
-            new_label_path = os.path.join(client_dir, os.path.basename(original_label_path))
-            if args.copy:
-                shutil.copy2(original_label_path, new_label_path)
-            else:
-                shutil.move(original_label_path, new_label_path)
-            slice_entry["label_path"] = new_label_path
+                shutil.move(src_path, dst_path)
+            
+            vol_metadata = {
+                'volume_idx': vol_idx,
+                'file_path': dst_path,
+                'num_slices': vol_info['num_slices'],
+                'labels_present': list(vol_info['labels_present'])
+            }
+            client_metadata['volumes'].append(vol_metadata)
+            client_metadata['total_slices'] += vol_info['num_slices']
+            
+            # Update label distribution
+            for label in vol_info['labels_present']:
+                client_metadata['label_distribution'][str(label)] += 1
         
-        # Updated client metadata
-        client_metadata_path = os.path.join(client_dir, 'metadata.json')
-        with open(client_metadata_path, 'w') as f:
-            json.dump(client_metadata, f)
+        # Save client metadata
+        metadata_path = os.path.join(client_dir, 'metadata.json')
+        with open(metadata_path, 'w') as f:
+            json.dump(client_metadata, f, indent=2)
         
-        print(f'Client {client_id}: {len(client_metadata)} slices from {len(vols)} volumes')
+        print(f'Client {client_id}: {client_metadata["total_slices"]} slices from {len(vols)} volumes')
 
 if __name__ == '__main__':
     main()

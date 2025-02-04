@@ -8,7 +8,7 @@ import nibabel as nib
 import numpy as np
 import torch
 from torch.utils.data import Dataset, DataLoader
-from torchvision.transforms import Resize
+from torchvision.transforms import Resize, InterpolationMode
 from sklearn.model_selection import train_test_split
 from tqdm import tqdm
 import matplotlib.pyplot as plt
@@ -17,6 +17,7 @@ from rich import print
 from dotenv import load_dotenv
 from typing import List, Tuple, Dict, Optional
 from utils.normalizer import PercentileNormalizer
+import h5py
 
 load_dotenv()
 
@@ -267,48 +268,46 @@ class BRATSDataset2D(Dataset):
 
         slice_axis = {"axial": 2, "sagittal": 0, "coronal": 1}[slice_direction]
         
-        for slice_idx in range(combined_volume.shape[slice_axis]):
-            if slice_axis == 0:
-                image_slice = combined_volume[slice_idx, :, :, :]
-                label_slice = label_3d[slice_idx, :, :]
-            elif slice_axis == 1:
-                image_slice = combined_volume[:, slice_idx, :, :]
-                label_slice = label_3d[:, slice_idx, :]
-            else:
-                image_slice = combined_volume[:, :, slice_idx, :]
-                label_slice = label_3d[:, :, slice_idx]
+        h5_filename = os.path.join(output_dir, f"volume_{volume_idx}.h5")
 
-            has_labels = np.sum(label_slice) > 0
+        with h5py.File(h5_filename, 'w') as h5f:
+            images_group = h5f.create_group('images')
+            labels_group = h5f.create_group('labels')
 
-            def __save_slice():
-                """Helper to save slice and update metadata"""
-                image_path = os.path.join(
-                    output_dir, f"image_vol{volume_idx}_slice{slice_idx}.npy"
-                )
-                label_path = os.path.join(
-                    output_dir, f"label_vol{volume_idx}_slice{slice_idx}.npy"
-                )
+            for slice_idx in range(combined_volume.shape[slice_axis]):
+                if slice_axis == 0:
+                    image_slice = combined_volume[slice_idx, :, :, :]
+                    label_slice = label_3d[slice_idx, :, :]
+                elif slice_axis == 1:
+                    image_slice = combined_volume[:, slice_idx, :, :]
+                    label_slice = label_3d[:, slice_idx, :]
+                else:
+                    image_slice = combined_volume[:, :, slice_idx, :]
+                    label_slice = label_3d[:, :, slice_idx]
 
-                np.save(image_path, image_slice)
-                np.save(label_path, label_slice)
+                has_labels = np.sum(label_slice) > 0
 
-                vol_metadata.append({
-                    "volume_idx": volume_idx,
-                    "slice_idx": slice_idx,
-                    "image_path": image_path,
-                    "label_path": label_path,
-                    "labels_present": [int(l) for l in np.unique(label_slice)],
-                })
+                def __save_slice():
+                    """Helper to save slice and update metadata"""
+                    images_group.create_dataset(f'slice_{slice_idx}', data=image_slice, compression='gzip')
+                    labels_group.create_dataset(f'slice_{slice_idx}', data=label_slice, compression='gzip')
 
-            if has_labels:
-                vol_labeled += 1
+                    vol_metadata.append({
+                        "volume_idx": volume_idx,
+                        "slice_idx": slice_idx,
+                        "h5_path": h5_filename,
+                        "labels_present": [int(l) for l in np.unique(label_slice)],
+                    })
 
-            if filter_empty_slices:
                 if has_labels:
+                    vol_labeled += 1
+
+                if filter_empty_slices:
+                    if has_labels:
+                        __save_slice()
+                else:
+                    # Save all slices
                     __save_slice()
-            else:
-                # Save all slices
-                __save_slice()
 
         return vol_metadata, len(vol_metadata), vol_labeled
 
@@ -429,7 +428,7 @@ class BRATSDataset2D(Dataset):
         for item in tqdm(metadata, desc="Loading metadata"):
             self.volume_indices.append(item["volume_idx"])
             self.slice_indices.append(item["slice_idx"])
-            self.slice_paths.append((item["image_path"], item["label_path"]))
+            self.slice_paths.append((item["h5_path"], item["slice_idx"]))
 
     def __len__(self):
         return len(self.slice_paths)
@@ -439,7 +438,7 @@ class BRATSDataset2D(Dataset):
         
         Args:
             idx: Index of sample to retrieve
-
+              
         Returns:
             Tuple containing:
                 - image: Tensor of shape (C, H, W)
@@ -448,11 +447,15 @@ class BRATSDataset2D(Dataset):
         Raises:
             FileNotFoundError: If preprocessed files are missing
         """
-        image_path, label_path = self.slice_paths[idx]
+        h5_path, slice_idx = self.slice_paths[idx]
 
         try:
-            image_slice = np.load(image_path)  # Shape (H, W, C)
-            label_slice = np.load(label_path)
+            with h5py.File(h5_path, 'r') as h5f:
+                images_group = h5f['images']
+                labels_group = h5f['labels']
+
+                image_slice = images_group[f'slice_{slice_idx}'][:]
+                label_slice = labels_group[f'slice_{slice_idx}'][:]
         except FileNotFoundError as e:
             raise FileNotFoundError(
                 f"Preprocessed data missing for index {idx}: {str(e)}"
@@ -478,7 +481,7 @@ if __name__ == "__main__":
         modality_to_use=["FLAIR", "T1w", "t1gd", "T2w"],
         slice_direction="axial",
         transform_image=Resize((128, 128)),
-        transform_label=Resize((128, 128)),
+        transform_label=Resize((128, 128), interpolation=InterpolationMode.NEAREST),
         split="train",
         filter_empty_slices=False,
     )
@@ -488,18 +491,18 @@ if __name__ == "__main__":
         modality_to_use=["FLAIR", "T1w", "t1gd", "T2w"],
         slice_direction="axial",
         transform_image=Resize((128, 128)),
-        transform_label=Resize((128, 128)),
+        transform_label=Resize((128, 128), interpolation=InterpolationMode.NEAREST),
         split="test",
         filter_empty_slices=False,
     )
     dataloader = DataLoader(dataset, batch_size=16, shuffle=True, num_workers=16)
 
-    weight = dataset._get_class_weights()
-    print(weight)
+    #weight = dataset._get_class_weights()
+    #print(weight)
 
-    log_weight = torch.log(weight+1)
-    normalized_weight = log_weight / log_weight.sum()
-    print(normalized_weight)
+    #log_weight = torch.log(weight+1)
+    #normalized_weight = log_weight / log_weight.sum()
+    #print(normalized_weight)
     print(len(dataset))
     print(dataset[0])
 
@@ -523,7 +526,7 @@ if __name__ == "__main__":
 
         # Plot each modality separately
         for mod_idx, mod_name in enumerate(["FLAIR", "T1w", "t1gd", "T2w"]):
-            axes[idx, mod_idx].imshow(image[:, :, mod_idx], cmap="gray")
+            axes[idx, mod_idx].imshow(image[:, :, mod_idx], cmap="gray", vmin=0, vmax=1)
             axes[idx, mod_idx].axis("off")
             axes[idx, mod_idx].set_title(f"{mod_name}\nVol {volume_idx}, Slice {slice_idx}")
 
