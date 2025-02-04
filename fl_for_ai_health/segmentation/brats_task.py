@@ -345,7 +345,7 @@ def test(
 
     total_loss = 0.0
     with torch.no_grad():
-        for images, masks in testloader:
+        for batch_idx, (images, masks) in enumerate(testloader):
             images, masks = images.to(device), masks.to(device)
             
             with autocast(device_type=device.type, dtype=torch.bfloat16):
@@ -356,6 +356,8 @@ def test(
             preds = torch.argmax(outputs, dim=1)
             val_dice.update(preds, masks)
             val_iou.update(preds, masks)
+            if viz_fn and batch_idx % 200 == 0:
+                viz_fn(images, masks, outputs, batch_idx, server_round)
 
     return (
         total_loss / len(testloader),

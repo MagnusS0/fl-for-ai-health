@@ -184,7 +184,7 @@ class CustomFedAvg(FedAvg):
 
     def _calculate_federated_metrics(
         self,
-        results: List[Tuple[any, EvaluateRes]]
+        results: List[Tuple[ EvaluateRes]]
     ) -> Dict[str, float]:
         """Calculate weighted average of client metrics."""
         dice_scores, iou_scores, examples = [], [], []
@@ -216,6 +216,7 @@ class CustomFedAvg(FedAvg):
         images: torch.Tensor,
         labels: torch.Tensor,
         outputs: torch.Tensor,
+        batch_idx: int,
         round_num: int
     ) -> None:
         """Visualize and log model predictions to TensorBoard.
@@ -230,7 +231,8 @@ class CustomFedAvg(FedAvg):
         fig = self._create_prediction_figure(batch_size)
         self._plot_predictions(fig, images, labels, outputs, batch_size)
         
-        self.writer.add_figure("predictions", fig, round_num)
+        self.writer.add_figure(f"predictions_{batch_idx}", fig, round_num)
+    
         plt.close(fig)
 
     def _create_prediction_figure(self, batch_size: int) -> plt.Figure:
@@ -239,7 +241,7 @@ class CustomFedAvg(FedAvg):
             batch_size, 
             6, 
             figsize=(24, 3*batch_size),
-            tight_layout=True
+            tight_layout=False
         )
         plt.subplots_adjust(wspace=0.05, hspace=0.1)
         return fig
@@ -261,7 +263,7 @@ class CustomFedAvg(FedAvg):
             self._plot_ground_truth(labels[i], fig.axes[i*6 + 4])
             self._plot_prediction(predictions[i], fig.axes[i*6 + 5])
             
-        self._add_colorbar(fig)
+        # self._add_colorbar(fig)
 
     def _plot_modalities(
         self,
@@ -272,7 +274,7 @@ class CustomFedAvg(FedAvg):
         """Plot individual imaging modalities."""
         for mod_idx in range(4):
             ax = axes[mod_idx]
-            ax.imshow(image[mod_idx].cpu().numpy(), cmap="gray", vmin=-1, vmax=3)
+            ax.imshow(image[mod_idx].cpu().numpy(), cmap="gray", vmin=0, vmax=1)
             ax.axis("off")
             if ax.get_subplotspec().is_first_row():
                 ax.set_title(modality_names[mod_idx], fontsize=8)
