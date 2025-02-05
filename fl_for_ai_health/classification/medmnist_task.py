@@ -39,12 +39,12 @@ class MedMNISTDatasetCache:
         self._dataset = None
         self._from_disk = False
     
-    def initialize(self, partition_id: int, num_partitions: int, split: str = "train", from_disk: bool = False) -> None:
+    def initialize(self, partition_id: int, num_partitions: int, split: str = "train", from_disk: bool = False, disk_path: str = None) -> None:
         """Initialize the dataset cache."""
         self._from_disk = from_disk
         
         if from_disk:
-            path = f"./data/medmnist/medmnist_part_{partition_id + 1}"
+            path = f"{disk_path}/medmnist/medmnist_part_{partition_id + 1}"
             self._dataset = load_from_disk(path)
         else:
             if not self._dataset:
@@ -84,9 +84,9 @@ class MedMNISTDatasetCache:
 
 _dataset_cache = MedMNISTDatasetCache()
 
-def load_data(partition_id: int, num_partitions: int, split: str = "train", from_disk: bool = False):
+def load_data(partition_id: int, num_partitions: int, split: str = "train", from_disk: bool = False, disk_path: str = None) -> Tuple[DataLoader, DataLoader]:
     """Load partition MedMNIST data."""
-    _dataset_cache.initialize(partition_id, num_partitions, split, from_disk)
+    _dataset_cache.initialize(partition_id, num_partitions, split, from_disk, disk_path)
     return _dataset_cache.create_loaders()
 
 
