@@ -38,7 +38,7 @@ def server_fn(context: Context):
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
     # Load test dataset
-    testloader, _ = load_data(partition_id=0, num_partitions=1, split="test")
+    _, testloader = load_data(partition_id=0, num_partitions=1, split="test")
 
     # Initialize model parameters
     net = load_model(context.run_config)

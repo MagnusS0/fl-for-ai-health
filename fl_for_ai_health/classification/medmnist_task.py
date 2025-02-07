@@ -7,7 +7,7 @@ import torch.nn as nn
 from torch.amp import autocast, GradScaler
 from flwr_datasets import FederatedDataset
 from flwr_datasets.partitioner import IidPartitioner
-from datasets import load_from_disk
+from datasets import load_from_disk, load_dataset
 from torch.utils.data import DataLoader
 from torchvision.transforms import Compose, Normalize, ToTensor
 from torchmetrics.classification import MulticlassAUROC, MulticlassAccuracy, MulticlassF1Score
@@ -48,13 +48,16 @@ class MedMNISTDatasetCache:
             self._dataset = load_from_disk(path)
         else:
             if not self._dataset:
-                partitioner = IidPartitioner(num_partitions=num_partitions)
-                fds = FederatedDataset(
-                    dataset="MagnusSa/medmnist",
-                    partitioners={split: partitioner},
-                )
-                partition = fds.load_partition(partition_id)
-                self._dataset = partition.train_test_split(test_size=0.2, seed=42)
+                if split == "test":
+                    self._dataset = load_dataset("MagnusSa/medmnist", split="test")
+                else:
+                    partitioner = IidPartitioner(num_partitions=num_partitions)
+                    fds = FederatedDataset(
+                        dataset="MagnusSa/medmnist",
+                        partitioners={split: partitioner},
+                    )
+                    partition = fds.load_partition(partition_id)
+                    self._dataset = partition.train_test_split(test_size=0.2, seed=42)
     
     def create_loaders(self, batch_size: int = 32) -> Tuple[DataLoader, DataLoader]:
         """Create data loaders from cached dataset."""
@@ -69,17 +72,28 @@ class MedMNISTDatasetCache:
             batch["image"] = [pytorch_transforms(img) for img in batch["image"]]
             return batch
 
-        transformed_dataset = self._dataset.with_transform(apply_transforms)
-        
-        trainloader = DataLoader(
-            transformed_dataset["train"], 
-            batch_size=batch_size, 
-            shuffle=True
-        )
-        testloader = DataLoader(
-            transformed_dataset["test"], 
-            batch_size=batch_size
-        )
+        if isinstance(self._dataset, dict):
+            transformed_dataset = {
+                k: v.with_transform(apply_transforms) 
+                for k, v in self._dataset.items()
+            }
+            trainloader = DataLoader(
+                transformed_dataset["train"], 
+                batch_size=batch_size, 
+                shuffle=True
+            )
+            testloader = DataLoader(
+                transformed_dataset["test"], 
+                batch_size=batch_size
+            )
+        else:
+            transformed_dataset = self._dataset.with_transform(apply_transforms)
+            trainloader = None
+            testloader = DataLoader(
+                transformed_dataset,
+                batch_size=batch_size
+            )
+            
         return trainloader, testloader
 
 _dataset_cache = MedMNISTDatasetCache()
