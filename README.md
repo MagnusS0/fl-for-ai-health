@@ -85,12 +85,28 @@ tensorboard --logdir tb_logs/
 ## Dataset Preparation
 
 1. **MedMNIST**:
-   - Automatically downloaded via Hugging Face Datasets
-   - Preprocessed into train/test/val splits
+- Automatically downloaded via Hugging Face Datasets
+- Preprocessed into train/test/val splits
+- For distributed setup, split dataset:
+```bash
+python utils/split_medmnist.py --dataset-name MagnusSa/medmnist --num-partitions 4
+```
 
 2. **BRATS**:
-   - Requires manual download from [Medical Decathlon](http://medicaldecathlon.com/)
-   - Preprocessing handled by `data/brats.py`
+  - Requires manual download from [Medical Decathlon](http://medicaldecathlon.com/)
+  - For centralized preprocessing:
+      - Preprocessing handled by `data/brats.py`
+  - For distributed setup, first preprocess then split:
+```bash
+# First preprocess the dataset
+python data/brats.py --data-dir /path/to/Task01_BrainTumour
+
+# Then split into client partitions
+python utils/split_brats.py --data-dir /path/to/preprocessed_FLAIR_T1w_t1gd_T2w_axial \
+                           --num-clients 4 \
+                           --modalities FLAIR_T1w_t1gd_T2w \
+                           --slice-dir axial
+```
 
 ## Resources
 
