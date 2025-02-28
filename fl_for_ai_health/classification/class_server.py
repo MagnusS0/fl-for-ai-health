@@ -26,7 +26,11 @@ def gen_evaluate_fn(
         net = load_model(run_config)
         set_weights(net, parameters_ndarrays)
         loss, accuracy, auc, f1_score = test(net, testloader, device, run_config)
-        return loss, {"accuracy": accuracy, "auc": auc, "f1_score": f1_score}, run_config
+        return (
+            loss,
+            {"accuracy": accuracy, "auc": auc, "f1_score": f1_score},
+            run_config,
+        )
 
     return evaluate
 

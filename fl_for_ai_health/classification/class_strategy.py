@@ -35,7 +35,9 @@ class CustomFedAvg(FedAvg):
         if metrics["accuracy"] > self.best_accuracy_so_far:
             self.best_accuracy_so_far = metrics["accuracy"]
             print(f"🏆 New best Accuracy: {self.best_accuracy_so_far:.4f}")
-            print(f"With AUC: {metrics['auc']:.4f} and F1 Score: {metrics['f1_score']:.4f}")
+            print(
+                f"With AUC: {metrics['auc']:.4f} and F1 Score: {metrics['f1_score']:.4f}"
+            )
 
             # Save the best model
             model = load_model(run_config)
@@ -72,7 +74,11 @@ class CustomFedAvg(FedAvg):
         self.writer.add_scalar("federated/auc", avg_auc, server_round)
         self.writer.add_scalar("federated/f1_score", avg_f1_score, server_round)
 
-        return loss_aggregated, {"accuracy": float(avg_accuracy), "auc": float(avg_auc), "f1_score": float(avg_f1_score)}
+        return loss_aggregated, {
+            "accuracy": float(avg_accuracy),
+            "auc": float(avg_auc),
+            "f1_score": float(avg_f1_score),
+        }
 
     def evaluate(self, server_round, parameters):
         """Run centralized evaluation and log results."""
@@ -87,7 +93,9 @@ class CustomFedAvg(FedAvg):
             "centralized/accuracy", metrics["accuracy"], server_round
         )
         self.writer.add_scalar("centralized/auc", metrics["auc"], server_round)
-        self.writer.add_scalar("centralized/f1_score", metrics["f1_score"], server_round)
+        self.writer.add_scalar(
+            "centralized/f1_score", metrics["f1_score"], server_round
+        )
 
         # Update best model
         self.update_best_model(server_round, metrics, parameters, run_config)

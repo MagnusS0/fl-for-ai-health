@@ -8,6 +8,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from collections import OrderedDict
 
+
 class SimpleConvModule(nn.Module):
     """
     A simplified ConvModule for Conv-Norm-Act pattern.
@@ -25,7 +26,7 @@ class SimpleConvModule(nn.Module):
     ):
         super().__init__()
         layers = OrderedDict()
-        layers['conv'] = nn.Conv2d(
+        layers["conv"] = nn.Conv2d(
             in_channels,
             out_channels,
             kernel_size,
@@ -35,10 +36,10 @@ class SimpleConvModule(nn.Module):
         )
 
         if norm_layer:
-            layers['bn'] = norm_layer(out_channels)
+            layers["bn"] = norm_layer(out_channels)
 
         if act_layer:
-            layers['act'] = act_layer(inplace=True)
+            layers["act"] = act_layer(inplace=True)
 
         self.conv_block = nn.Sequential(layers)
 

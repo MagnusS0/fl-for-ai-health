@@ -52,8 +52,14 @@ class FlowerClient(NumPyClient):
 
     def evaluate(self, parameters, config):
         set_weights(self.net, parameters)
-        loss, accuracy, auc, f1_score = test(self.net, self.valloader, self.device, self.run_config)
-        return loss, len(self.valloader.dataset), {"accuracy": accuracy, "auc": auc, "f1_score": f1_score}
+        loss, accuracy, auc, f1_score = test(
+            self.net, self.valloader, self.device, self.run_config
+        )
+        return (
+            loss,
+            len(self.valloader.dataset),
+            {"accuracy": accuracy, "auc": auc, "f1_score": f1_score},
+        )
 
 
 def client_fn(context: Context):
@@ -63,7 +69,13 @@ def client_fn(context: Context):
 
     run_config = context.run_config
 
-    trainloader, valloader = load_data(partition_id, num_partitions, split="train", from_disk=run_config["from-disk"], disk_path=run_config["disk-path"])
+    trainloader, valloader = load_data(
+        partition_id,
+        num_partitions,
+        split="train",
+        from_disk=run_config["from-disk"],
+        disk_path=run_config["disk-path"],
+    )
     net = load_model(context.run_config)
     local_epochs = context.run_config["local-epochs"]
 

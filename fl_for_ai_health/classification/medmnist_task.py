@@ -10,7 +10,11 @@ from flwr_datasets.partitioner import IidPartitioner
 from datasets import load_from_disk, load_dataset
 from torch.utils.data import DataLoader
 from torchvision.transforms import Compose, Normalize, ToTensor
-from torchmetrics.classification import MulticlassAUROC, MulticlassAccuracy, MulticlassF1Score
+from torchmetrics.classification import (
+    MulticlassAUROC,
+    MulticlassAccuracy,
+    MulticlassF1Score,
+)
 from typing import Dict, Tuple
 from models.resnet.resnet18 import ResNet18
 from models.tiny_vit.tiny_vit import tiny_vit_5m_224
@@ -34,15 +38,22 @@ def load_model(run_config: Dict) -> nn.Module:
 
 class MedMNISTDatasetCache:
     """Class-based cache for MedMNIST dataset."""
-    
+
     def __init__(self):
         self._dataset = None
         self._from_disk = False
-    
-    def initialize(self, partition_id: int, num_partitions: int, split: str = "train", from_disk: bool = False, disk_path: str = None) -> None:
+
+    def initialize(
+        self,
+        partition_id: int,
+        num_partitions: int,
+        split: str = "train",
+        from_disk: bool = False,
+        disk_path: str = None,
+    ) -> None:
         """Initialize the dataset cache."""
         self._from_disk = from_disk
-        
+
         if from_disk:
             path = f"{disk_path}/medmnist/medmnist_part_{partition_id + 1}"
             self._dataset = load_from_disk(path)
@@ -58,12 +69,12 @@ class MedMNISTDatasetCache:
                     )
                     partition = fds.load_partition(partition_id)
                     self._dataset = partition.train_test_split(test_size=0.2, seed=42)
-    
+
     def create_loaders(self, batch_size: int = 32) -> Tuple[DataLoader, DataLoader]:
         """Create data loaders from cached dataset."""
         if self._dataset is None:
             raise RuntimeError("Dataset cache not initialized")
-            
+
         pytorch_transforms = Compose(
             [ToTensor(), Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))]
         )
@@ -74,31 +85,30 @@ class MedMNISTDatasetCache:
 
         if isinstance(self._dataset, dict):
             transformed_dataset = {
-                k: v.with_transform(apply_transforms) 
-                for k, v in self._dataset.items()
+                k: v.with_transform(apply_transforms) for k, v in self._dataset.items()
             }
             trainloader = DataLoader(
-                transformed_dataset["train"], 
-                batch_size=batch_size, 
-                shuffle=True
+                transformed_dataset["train"], batch_size=batch_size, shuffle=True
             )
-            testloader = DataLoader(
-                transformed_dataset["test"], 
-                batch_size=batch_size
-            )
+            testloader = DataLoader(transformed_dataset["test"], batch_size=batch_size)
         else:
             transformed_dataset = self._dataset.with_transform(apply_transforms)
             trainloader = None
-            testloader = DataLoader(
-                transformed_dataset,
-                batch_size=batch_size
-            )
-            
+            testloader = DataLoader(transformed_dataset, batch_size=batch_size)
+
         return trainloader, testloader
+
 
 _dataset_cache = MedMNISTDatasetCache()
 
-def load_data(partition_id: int, num_partitions: int, split: str = "train", from_disk: bool = False, disk_path: str = None) -> Tuple[DataLoader, DataLoader]:
+
+def load_data(
+    partition_id: int,
+    num_partitions: int,
+    split: str = "train",
+    from_disk: bool = False,
+    disk_path: str = None,
+) -> Tuple[DataLoader, DataLoader]:
     """Load partition MedMNIST data."""
     _dataset_cache.initialize(partition_id, num_partitions, split, from_disk, disk_path)
     return _dataset_cache.create_loaders()
@@ -110,7 +120,9 @@ def train(net, trainloader, epochs, device):
 
     criterion = torch.nn.CrossEntropyLoss().to(device)
     optimizer = torch.optim.AdamW(net.parameters(), lr=3e-4)
-    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, epochs, eta_min=0.0001)
+    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
+        optimizer, epochs, eta_min=0.0001
+    )
 
     net.train()
 

@@ -2,7 +2,7 @@
 
 import torch
 from flwr.client import ClientApp, NumPyClient
-from flwr.common import Context, ConfigsRecord, ParametersRecord
+from flwr.common import Context, ConfigsRecord
 from fl_for_ai_health.segmentation.brats_task import (
     get_weights,
     load_data,
@@ -33,7 +33,7 @@ class FlowerClient(NumPyClient):
 
         # Get scheduler state from previous round (sent by server)
         scheduler_state = None
-        
+
         # Check if both states exist in config
         if "scheduler_state_bytes" in config:
             if config["scheduler_state_bytes"]:
@@ -41,8 +41,12 @@ class FlowerClient(NumPyClient):
 
         # Training with potential previous state
         train_loss, new_scheduler_state = train(
-            self.net, self.trainloader, self.local_epochs, 
-            self.device, self.run_config, scheduler_state
+            self.net,
+            self.trainloader,
+            self.local_epochs,
+            self.device,
+            self.run_config,
+            scheduler_state,
         )
 
         return (
@@ -50,7 +54,9 @@ class FlowerClient(NumPyClient):
             len(self.trainloader.dataset),
             {
                 "train_loss": train_loss,
-                "scheduler_state_bytes": pickle.dumps(new_scheduler_state) if new_scheduler_state else b"",
+                "scheduler_state_bytes": pickle.dumps(new_scheduler_state)
+                if new_scheduler_state
+                else b"",
             },
         )
 

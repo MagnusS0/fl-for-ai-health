@@ -2,10 +2,10 @@
 From https://github.com/BrainLesion/preprocessing
 """
 
-
 import numpy as np
 
-class PercentileNormalizer():
+
+class PercentileNormalizer:
     """
     Normalizer subclass for percentile-based image normalization.
     """

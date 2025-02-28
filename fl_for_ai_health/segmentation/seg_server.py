@@ -41,10 +41,10 @@ def gen_evaluate_fn(
 
     return evaluate
 
+
 def on_fit_config(server_round: int):
     """`config` that clients receive when running `fit()`"""
     return {"local_epochs": 1 if server_round < 2 else 2}
-
 
 
 def server_fn(context: Context):
@@ -69,7 +69,7 @@ def server_fn(context: Context):
         fraction_evaluate=1.0,
         min_available_clients=2,
         initial_parameters=parameters,
-        #on_fit_config_fn=on_fit_config,
+        # on_fit_config_fn=on_fit_config,
         tb_log_dir="tb_logs",
         tb_run_name=context.run_config["tb_run_name"],
         evaluate_fn=gen_evaluate_fn(testloader, device, context.run_config),

@@ -12,7 +12,9 @@ class DiceLoss(nn.Module):
         self.num_classes = num_classes
         self.smooth = smooth
         self.ignore_index = ignore_index
-        self.f1_score = F1Score(task="multiclass", num_classes=num_classes, average="macro").to(device)
+        self.f1_score = F1Score(
+            task="multiclass", num_classes=num_classes, average="macro"
+        ).to(device)
         self.binary_f1_score = BinaryF1Score().to(device)
 
     def forward(self, outputs, targets):
@@ -39,7 +41,9 @@ class FocalLoss(nn.Module):
         focal_loss = (1 - pt) ** self.gamma * ce_loss
 
         if self.alpha is not None:
-            alpha_t = self.alpha.to(targets.device)[targets.view(-1)].view(targets.shape)
+            alpha_t = self.alpha.to(targets.device)[targets.view(-1)].view(
+                targets.shape
+            )
             focal_loss = alpha_t * focal_loss
 
         if self.reduction == "mean":
@@ -53,7 +57,7 @@ class FocalLoss(nn.Module):
 class DiceFocalLoss(nn.Module):
     """
     Dice Focal Loss combines Dice Loss and Focal Loss
-    
+
     Args:
         lambda_dice (float): Weight for Dice Loss
         lambda_focal (float): Weight for Focal Loss
@@ -79,7 +83,12 @@ class DiceFocalLoss(nn.Module):
         super().__init__()
         self.lambda_dice = lambda_dice
         self.lambda_focal = lambda_focal
-        self.dice_loss = DiceLoss(smooth=dice_smooth, ignore_index=ignore_index, num_classes=num_classes, device=device)
+        self.dice_loss = DiceLoss(
+            smooth=dice_smooth,
+            ignore_index=ignore_index,
+            num_classes=num_classes,
+            device=device,
+        )
         self.focal_loss = FocalLoss(
             gamma=focal_gamma, alpha=focal_alpha, reduction="mean"
         )

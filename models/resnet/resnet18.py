@@ -60,19 +60,21 @@ class ResidualBlock(nn.Module):
         self.activation = activation
 
         main_layers = OrderedDict()
-        main_layers['conv1'] = DefaultConv2d(in_channels, out_channels, stride=strides)
-        main_layers['bn1'] = nn.BatchNorm2d(out_channels)
-        main_layers['act1'] = activation
-        main_layers['conv2'] = DefaultConv2d(out_channels, out_channels)
-        main_layers['bn2'] = nn.BatchNorm2d(out_channels)
+        main_layers["conv1"] = DefaultConv2d(in_channels, out_channels, stride=strides)
+        main_layers["bn1"] = nn.BatchNorm2d(out_channels)
+        main_layers["act1"] = activation
+        main_layers["conv2"] = DefaultConv2d(out_channels, out_channels)
+        main_layers["bn2"] = nn.BatchNorm2d(out_channels)
         self.main_layers = nn.Sequential(main_layers)
 
         # Skip layers with named layers
         self.skip_layers = nn.Sequential()
         if strides > 1 or in_channels != out_channels:
             skip_layers = OrderedDict()
-            skip_layers['conv'] = DefaultConv2d(in_channels, out_channels, kernel_size=1, stride=strides)
-            skip_layers['bn'] = nn.BatchNorm2d(out_channels)
+            skip_layers["conv"] = DefaultConv2d(
+                in_channels, out_channels, kernel_size=1, stride=strides
+            )
+            skip_layers["bn"] = nn.BatchNorm2d(out_channels)
             self.skip_layers = nn.Sequential(skip_layers)
 
     def forward(self, x):

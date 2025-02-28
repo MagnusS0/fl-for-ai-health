@@ -8,6 +8,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from collections import OrderedDict
 
+
 class ConvDouble(nn.Module):
     """
     2 * 3x3 conv layers with batch normalization and ReLU activation.
@@ -17,18 +18,19 @@ class ConvDouble(nn.Module):
     def __init__(self, in_channels, out_channels):
         super().__init__()
         layers = OrderedDict()
-        layers['conv1'] = nn.Conv2d(in_channels, out_channels, kernel_size=3, padding=1)
-        layers['bn1'] = nn.BatchNorm2d(out_channels)
-        layers['act1'] = nn.ReLU()
-        layers['conv2'] = nn.Conv2d(out_channels, out_channels, kernel_size=3, padding=1)
-        layers['bn2'] = nn.BatchNorm2d(out_channels)
-        layers['act2'] = nn.ReLU()
+        layers["conv1"] = nn.Conv2d(in_channels, out_channels, kernel_size=3, padding=1)
+        layers["bn1"] = nn.BatchNorm2d(out_channels)
+        layers["act1"] = nn.ReLU()
+        layers["conv2"] = nn.Conv2d(
+            out_channels, out_channels, kernel_size=3, padding=1
+        )
+        layers["bn2"] = nn.BatchNorm2d(out_channels)
+        layers["act2"] = nn.ReLU()
 
         self.conv_double = nn.Sequential(layers)
 
     def forward(self, x):
         return self.conv_double(x)
-
 
 
 class DownPool(nn.Module):
