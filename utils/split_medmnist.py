@@ -1,9 +1,13 @@
 import argparse
 from flwr_datasets import FederatedDataset
 from flwr_datasets.partitioner import IidPartitioner
+from dotenv import load_dotenv
+import os
+
+load_dotenv()
 
 
-DATASET_DIRECTORY = "data/medmnist"
+DATASET_DIRECTORY = os.getenv("MEDMNIST_DIRECTORY")
 
 
 def save_dataset_to_disk(dataset_name: str, num_partitions: int, split: str):
@@ -17,19 +21,19 @@ def save_dataset_to_disk(dataset_name: str, num_partitions: int, split: str):
         partitioners={split: partitioner},
     )
 
+    base_name = dataset_name.split("/")[-1]
+
     for partition_id in range(num_partitions):
         partition = fds.load_partition(partition_id)
         partition_train_test = partition.train_test_split(test_size=0.2, seed=42)
-        file_path = f"./{DATASET_DIRECTORY}/{dataset_name}_part_{partition_id + 1}"
+        file_path = f"{DATASET_DIRECTORY}/{base_name}_part_{partition_id + 1}"
         partition_train_test.save_to_disk(file_path)
         print(f"Written: {file_path}")
 
 
 if __name__ == "__main__":
     # Initialize argument parser
-    parser = argparse.ArgumentParser(
-        description="Save a HF dataset partitions to disk"
-    )
+    parser = argparse.ArgumentParser(description="Save a HF dataset partitions to disk")
 
     parser.add_argument(
         "--dataset-name",

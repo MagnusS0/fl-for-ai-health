@@ -15,11 +15,12 @@ import matplotlib.pyplot as plt
 from joblib import Parallel, delayed
 from rich import print
 from dotenv import load_dotenv
-from typing import List, Tuple, Dict, Optional
+from typing import List, Tuple, Optional
 from utils.normalizer import PercentileNormalizer
 import h5py
 
 load_dotenv()
+
 
 class BRATSDataset2D(Dataset):
     """
@@ -193,8 +194,7 @@ class BRATSDataset2D(Dataset):
 
     @staticmethod
     def get_cropping_indices(
-        volume_mask: np.ndarray, 
-        margin: int = 10
+        volume_mask: np.ndarray, margin: int = 10
     ) -> Optional[Tuple[int, int, int, int, int, int]]:
         """
         Calculates cropping indices based on a combined mask of all modalities.
@@ -227,7 +227,13 @@ class BRATSDataset2D(Dataset):
 
     @staticmethod
     def _process_single_volume(
-        data_item, data_dir, output_dir, modality_channels, slice_direction, volume_idx, filter_empty_slices=True
+        data_item,
+        data_dir,
+        output_dir,
+        modality_channels,
+        slice_direction,
+        volume_idx,
+        filter_empty_slices=True,
     ):
         """Process a single volume with multiple modalities using BrainLesion-Preprocessing"""
         image_path = os.path.join(data_dir, data_item["image"].replace("./", ""))
@@ -245,7 +251,12 @@ class BRATSDataset2D(Dataset):
         for modality_channel in modality_channels:
             modality_data = image_3d[..., modality_channel]
             # Percentile normalization
-            normalizer = PercentileNormalizer(lower_percentile=0.1, upper_percentile=99.9, lower_limit=0, upper_limit=1)
+            normalizer = PercentileNormalizer(
+                lower_percentile=0.1,
+                upper_percentile=99.9,
+                lower_limit=0,
+                upper_limit=1,
+            )
             modality_data = normalizer.normalize(modality_data)
             volume_data.append(modality_data)
 
@@ -253,7 +264,9 @@ class BRATSDataset2D(Dataset):
         combined_volume = np.stack(volume_data, axis=-1)
 
         # Intelligent cropping
-        cropping_indices = BRATSDataset2D.get_cropping_indices(combined_volume, margin=2)
+        cropping_indices = BRATSDataset2D.get_cropping_indices(
+            combined_volume, margin=2
+        )
         if cropping_indices is not None:
             x_min, x_max, y_min, y_max, z_min, z_max = cropping_indices
             combined_volume = combined_volume[x_min:x_max, y_min:y_max, z_min:z_max]
@@ -262,17 +275,17 @@ class BRATSDataset2D(Dataset):
             combined_volume = combined_volume
             label_3d = label_3d
 
-
         vol_metadata = []
         vol_labeled = 0
 
         slice_axis = {"axial": 2, "sagittal": 0, "coronal": 1}[slice_direction]
-        
-        h5_filename = os.path.join(output_dir, f"volume_{volume_idx}.h5")
 
-        with h5py.File(h5_filename, 'w') as h5f:
-            images_group = h5f.create_group('images')
-            labels_group = h5f.create_group('labels')
+        h5_filename = f"volume_{volume_idx}.h5"
+        h5_filepath = os.path.join(output_dir, h5_filename)
+
+        with h5py.File(h5_filepath, "w") as h5f:
+            images_group = h5f.create_group("images")
+            labels_group = h5f.create_group("labels")
 
             for slice_idx in range(combined_volume.shape[slice_axis]):
                 if slice_axis == 0:
@@ -289,15 +302,21 @@ class BRATSDataset2D(Dataset):
 
                 def __save_slice():
                     """Helper to save slice and update metadata"""
-                    images_group.create_dataset(f'slice_{slice_idx}', data=image_slice, compression='gzip')
-                    labels_group.create_dataset(f'slice_{slice_idx}', data=label_slice, compression='gzip')
+                    images_group.create_dataset(
+                        f"slice_{slice_idx}", data=image_slice, compression="gzip"
+                    )
+                    labels_group.create_dataset(
+                        f"slice_{slice_idx}", data=label_slice, compression="gzip"
+                    )
 
-                    vol_metadata.append({
-                        "volume_idx": volume_idx,
-                        "slice_idx": slice_idx,
-                        "h5_path": h5_filename,
-                        "labels_present": [int(l) for l in np.unique(label_slice)],
-                    })
+                    vol_metadata.append(
+                        {
+                            "volume_idx": volume_idx,
+                            "slice_idx": slice_idx,
+                            "h5_path": h5_filename,  # Store relative path
+                            "labels_present": [int(l) for l in np.unique(label_slice)],
+                        }
+                    )
 
                 if has_labels:
                     vol_labeled += 1
@@ -398,13 +417,13 @@ class BRATSDataset2D(Dataset):
         weights_path = os.path.join(self.preprocessed_dir, "class_weights.pt")
         if os.path.exists(weights_path):
             return torch.load(weights_path)
-        
+
         class_counts = torch.zeros(4, dtype=torch.float32)
-        
+
         for idx in tqdm(range(len(self)), desc="Calculating class weights"):
-            _, label = self[idx] 
+            _, label = self[idx]
             label = label.squeeze().long()
-            
+
             for cls in range(4):
                 class_counts[cls] += (label == cls).sum().item()
 
@@ -416,7 +435,7 @@ class BRATSDataset2D(Dataset):
 
         # Cache
         torch.save(weights, weights_path)
-        
+
         return weights
 
     def _load_preprocessed_metadata(self):
@@ -435,10 +454,10 @@ class BRATSDataset2D(Dataset):
 
     def __getitem__(self, idx: int) -> Tuple[torch.Tensor, torch.Tensor]:
         """Get a single dataset sample.
-        
+
         Args:
             idx: Index of sample to retrieve
-              
+
         Returns:
             Tuple containing:
                 - image: Tensor of shape (C, H, W)
@@ -448,14 +467,17 @@ class BRATSDataset2D(Dataset):
             FileNotFoundError: If preprocessed files are missing
         """
         h5_path, slice_idx = self.slice_paths[idx]
+        print(h5_path)
+        h5_path = os.path.join(self.preprocessed_dir, h5_path)
+        print(h5_path)
 
         try:
-            with h5py.File(h5_path, 'r') as h5f:
-                images_group = h5f['images']
-                labels_group = h5f['labels']
+            with h5py.File(h5_path, "r") as h5f:
+                images_group = h5f["images"]
+                labels_group = h5f["labels"]
 
-                image_slice = images_group[f'slice_{slice_idx}'][:]
-                label_slice = labels_group[f'slice_{slice_idx}'][:]
+                image_slice = images_group[f"slice_{slice_idx}"][:]
+                label_slice = labels_group[f"slice_{slice_idx}"][:]
         except FileNotFoundError as e:
             raise FileNotFoundError(
                 f"Preprocessed data missing for index {idx}: {str(e)}"
@@ -477,7 +499,7 @@ class BRATSDataset2D(Dataset):
 if __name__ == "__main__":
     dataset = BRATSDataset2D(
         data_dir=os.getenv("BRATS_DATA_DIR"),
-        dataset_json_path=os.getenv("BRATS_DATASET_JSON_PATH"),
+        dataset_json_path=os.getenv("BRATS_JSON_PATH"),
         modality_to_use=["FLAIR", "T1w", "t1gd", "T2w"],
         slice_direction="axial",
         transform_image=Resize((128, 128)),
@@ -487,7 +509,7 @@ if __name__ == "__main__":
     )
     test_dataset = BRATSDataset2D(
         data_dir=os.getenv("BRATS_DATA_DIR"),
-        dataset_json_path=os.getenv("BRATS_DATASET_JSON_PATH"),
+        dataset_json_path=os.getenv("BRATS_JSON_PATH"),
         modality_to_use=["FLAIR", "T1w", "t1gd", "T2w"],
         slice_direction="axial",
         transform_image=Resize((128, 128)),
@@ -497,12 +519,12 @@ if __name__ == "__main__":
     )
     dataloader = DataLoader(dataset, batch_size=16, shuffle=True, num_workers=16)
 
-    #weight = dataset._get_class_weights()
-    #print(weight)
+    # weight = dataset._get_class_weights()
+    # print(weight)
 
-    #log_weight = torch.log(weight+1)
-    #normalized_weight = log_weight / log_weight.sum()
-    #print(normalized_weight)
+    # log_weight = torch.log(weight+1)
+    # normalized_weight = log_weight / log_weight.sum()
+    # print(normalized_weight)
     print(len(dataset))
     print(dataset[0])
 
@@ -513,7 +535,9 @@ if __name__ == "__main__":
     print(labels.shape)
 
     # Create a figure with 4 samples showing all modalities
-    fig, axes = plt.subplots(4, 5, figsize=(25, 20))  # 4 samples, 5 columns (4 modalities + label)
+    fig, axes = plt.subplots(
+        4, 5, figsize=(25, 20)
+    )  # 4 samples, 5 columns (4 modalities + label)
 
     for idx in range(4):
         # Get image and label
@@ -528,7 +552,9 @@ if __name__ == "__main__":
         for mod_idx, mod_name in enumerate(["FLAIR", "T1w", "t1gd", "T2w"]):
             axes[idx, mod_idx].imshow(image[:, :, mod_idx], cmap="gray", vmin=0, vmax=1)
             axes[idx, mod_idx].axis("off")
-            axes[idx, mod_idx].set_title(f"{mod_name}\nVol {volume_idx}, Slice {slice_idx}")
+            axes[idx, mod_idx].set_title(
+                f"{mod_name}\nVol {volume_idx}, Slice {slice_idx}"
+            )
 
         # Plot label
         im = axes[idx, 4].imshow(label, cmap="tab10", vmin=0, vmax=3)
@@ -537,13 +563,12 @@ if __name__ == "__main__":
 
     # Add a colorbar
     cbar = fig.colorbar(
-        im, ax=axes.ravel().tolist(), 
-        orientation="horizontal", 
-        fraction=0.02, 
-        pad=0.04
+        im, ax=axes.ravel().tolist(), orientation="horizontal", fraction=0.02, pad=0.04
     )
     cbar.set_ticks([0, 1, 2, 3])
-    cbar.set_ticklabels(["Background", "Edema", "Non-enhancing tumor", "Enhancing tumour"])
+    cbar.set_ticklabels(
+        ["Background", "Edema", "Non-enhancing tumor", "Enhancing tumour"]
+    )
 
     plt.tight_layout()
     plt.show()
